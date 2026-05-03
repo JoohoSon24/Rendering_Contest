@@ -1,6 +1,11 @@
 import os
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
+import sys as _sys
+os.environ.setdefault('XLA_FLAGS',
+    f'--xla_gpu_cuda_data_dir={_sys.prefix}')
+_sys.stdout.reconfigure(line_buffering=True)
+
 import sys
 import tensorflow as tf
 import numpy as np
@@ -14,7 +19,10 @@ from load_deepvoxels import load_dv_data
 from load_blender import load_blender_data
 
 
-tf.compat.v1.enable_eager_execution()
+try:
+    tf.compat.v1.enable_eager_execution()
+except Exception:
+    pass
 
 
 def batchify(fn, chunk):
@@ -580,7 +588,7 @@ def train():
     if args.random_seed is not None:
         print('Fixing random seed', args.random_seed)
         np.random.seed(args.random_seed)
-        tf.compat.v1.set_random_seed(args.random_seed)
+        tf.random.set_seed(args.random_seed)
 
     # Load data
 
@@ -706,11 +714,11 @@ def train():
     if args.lrate_decay > 0:
         lrate = tf.keras.optimizers.schedules.ExponentialDecay(lrate,
                                                                decay_steps=args.lrate_decay * 1000, decay_rate=0.1)
-    optimizer = tf.keras.optimizers.Adam(lrate)
+    AdamOpt = getattr(tf.keras.optimizers, 'legacy', tf.keras.optimizers).Adam
+    optimizer = AdamOpt(lrate)
     models['optimizer'] = optimizer
 
-    global_step = tf.compat.v1.train.get_or_create_global_step()
-    global_step.assign(start)
+    global_step = tf.Variable(start, trainable=False, dtype=tf.int64, name='global_step')
 
     # Prepare raybatch tensor if batching random rays
     N_rand = args.N_rand
@@ -750,7 +758,7 @@ def train():
     print('VAL views are', i_val)
 
     # Summary writers
-    writer = tf.contrib.summary.create_file_writer(
+    writer = tf.compat.v2.summary.create_file_writer(
         os.path.join(basedir, 'summaries', expname))
     writer.set_as_default()
 
@@ -835,12 +843,13 @@ def train():
         def save_weights(net, prefix, i):
             path = os.path.join(
                 basedir, expname, '{}_{:06d}.npy'.format(prefix, i))
-            np.save(path, net.get_weights())
+            np.save(path, np.array(net.get_weights(), dtype=object), allow_pickle=True)
             print('saved weights at', path)
 
         if i % args.i_weights == 0:
             for k in models:
-                save_weights(models[k], k, i)
+                if hasattr(models[k], 'get_weights'):
+                    save_weights(models[k], k, i)
 
         if i % args.i_video == 0 and i > 0:
 
@@ -875,12 +884,12 @@ def train():
 
             print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
             print('iter time {:.05f}'.format(dt))
-            with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
-                tf.contrib.summary.scalar('loss', loss)
-                tf.contrib.summary.scalar('psnr', psnr)
-                tf.contrib.summary.histogram('tran', trans)
+            with writer.as_default():
+                tf.compat.v2.summary.scalar('loss', loss, step=i)
+                tf.compat.v2.summary.scalar('psnr', psnr, step=i)
+                tf.compat.v2.summary.histogram('tran', trans, step=i)
                 if args.N_importance > 0:
-                    tf.contrib.summary.scalar('psnr0', psnr0)
+                    tf.compat.v2.summary.scalar('psnr0', psnr0, step=i)
 
             if i % args.i_img == 0:
 
@@ -893,33 +902,32 @@ def train():
                                                 **render_kwargs_test)
 
                 psnr = mse2psnr(img2mse(rgb, target))
-                
+
                 # Save out the validation image for Tensorboard-free monitoring
                 testimgdir = os.path.join(basedir, expname, 'tboard_val_imgs')
                 if i==0:
                     os.makedirs(testimgdir, exist_ok=True)
                 imageio.imwrite(os.path.join(testimgdir, '{:06d}.png'.format(i)), to8b(rgb))
 
-                with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
+                with writer.as_default():
+                    tf.compat.v2.summary.image('rgb', to8b(rgb)[tf.newaxis].astype('float32') / 255., step=i)
+                    tf.compat.v2.summary.image(
+                        'disp', disp[tf.newaxis, ..., tf.newaxis], step=i)
+                    tf.compat.v2.summary.image(
+                        'acc', acc[tf.newaxis, ..., tf.newaxis], step=i)
 
-                    tf.contrib.summary.image('rgb', to8b(rgb)[tf.newaxis])
-                    tf.contrib.summary.image(
-                        'disp', disp[tf.newaxis, ..., tf.newaxis])
-                    tf.contrib.summary.image(
-                        'acc', acc[tf.newaxis, ..., tf.newaxis])
-
-                    tf.contrib.summary.scalar('psnr_holdout', psnr)
-                    tf.contrib.summary.image('rgb_holdout', target[tf.newaxis])
+                    tf.compat.v2.summary.scalar('psnr_holdout', psnr, step=i)
+                    tf.compat.v2.summary.image('rgb_holdout', target[tf.newaxis], step=i)
 
                 if args.N_importance > 0:
 
-                    with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
-                        tf.contrib.summary.image(
-                            'rgb0', to8b(extras['rgb0'])[tf.newaxis])
-                        tf.contrib.summary.image(
-                            'disp0', extras['disp0'][tf.newaxis, ..., tf.newaxis])
-                        tf.contrib.summary.image(
-                            'z_std', extras['z_std'][tf.newaxis, ..., tf.newaxis])
+                    with writer.as_default():
+                        tf.compat.v2.summary.image(
+                            'rgb0', to8b(extras['rgb0'])[tf.newaxis].astype('float32') / 255., step=i)
+                        tf.compat.v2.summary.image(
+                            'disp0', extras['disp0'][tf.newaxis, ..., tf.newaxis], step=i)
+                        tf.compat.v2.summary.image(
+                            'z_std', extras['z_std'][tf.newaxis, ..., tf.newaxis], step=i)
 
         global_step.assign_add(1)
 
