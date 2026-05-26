@@ -37,6 +37,7 @@ https://github.com/colmap/colmap/blob/1a4d0bad2e90aa65ce997c9d1779518eaed998d5/s
 
 import json
 import os
+import re
 import struct
 from dataclasses import dataclass
 from io import BufferedReader
@@ -154,7 +155,10 @@ def get_colmap_version(colmap_cmd: str, default_version=3.8) -> float:
     assert output is not None
     for line in output.split("\n"):
         if line.startswith("COLMAP"):
-            return float(line.split(" ")[1])
+            match = re.search(r"(\d+)\.(\d+)", line)
+            if match is not None:
+                major, minor = match.groups()
+                return float(f"{major}.{minor}")
     CONSOLE.print(f"[bold red]Could not find COLMAP version. Using default {default_version}")
     return default_version
 

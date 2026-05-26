@@ -41,6 +41,8 @@ class TextureMesh:
     """If using xatlas for unwrapping, the pixels per side of the texture image."""
     target_num_faces: Optional[int] = 50000
     """Target number of faces for the mesh to texture."""
+    texture_rows_per_chunk: int = 256
+    """Number of texture rows to render per batch."""
 
     def main(self) -> None:
         """Export textured mesh"""
@@ -64,6 +66,7 @@ class TextureMesh:
             output_dir=self.output_dir,
             unwrap_method=self.unwrap_method,
             num_pixels_per_side=self.num_pixels_per_side,
+            texture_rows_per_chunk=self.texture_rows_per_chunk,
         )
 
 

@@ -21,6 +21,26 @@ def main(args):
     output_dir.mkdir(parents=True, exist_ok=True)
     cam_params = json.load(open(input_dir / "transforms.json"))
 
+    frame_file_names = [Path(frame["file_path"]).name for frame in cam_params["frames"]]
+    image_dir_candidates = [
+        ("images", 1),
+        ("images_2", 2),
+        ("images_4", 4),
+        ("images_8", 8),
+    ]
+    selected_image_dir = None
+    image_scale_factor = 1
+    for dir_name, scale_factor in image_dir_candidates:
+        candidate_dir = input_dir / dir_name
+        if candidate_dir.exists() and all((candidate_dir / name).exists() for name in frame_file_names):
+            selected_image_dir = candidate_dir
+            image_scale_factor = scale_factor
+            break
+
+    if selected_image_dir is None:
+        raise FileNotFoundError("Could not find a complete nerfstudio image directory for all posed frames.")
+    print(f"Using image directory: {selected_image_dir.name} (scale factor {image_scale_factor}x)")
+
     # === load camera intrinsics and poses ===
     cam_intrinsics = []
     if args.data_type == "colmap":
@@ -28,6 +48,8 @@ def main(args):
             [cam_params["fl_x"], 0, cam_params["cx"]],
             [0, cam_params["fl_y"], cam_params["cy"]],
             [0, 0, 1]]))
+        if image_scale_factor != 1:
+            cam_intrinsics[0][:2, :] /= image_scale_factor
 
     frames = cam_params["frames"]
     poses = []
@@ -42,6 +64,8 @@ def main(args):
                 [frame["fl_x"], 0, frame["cx"]],
                 [0, frame["fl_y"], frame["cy"]],
                 [0, 0, 1]]))
+            if image_scale_factor != 1:
+                cam_intrinsics[-1][:2, :] /= image_scale_factor
 
         # load poses
         # OpenGL/Blender convention, needs to change to COLMAP/OpenCV convention
@@ -53,7 +77,7 @@ def main(args):
 
         # load images
         file_path = Path(frame["file_path"])
-        img_path = input_dir / "images" / file_path.name
+        img_path = selected_image_dir / file_path.name
         assert img_path.exists()
         image_paths.append(img_path)
 

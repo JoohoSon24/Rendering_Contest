@@ -331,6 +331,7 @@ def export_textured_mesh(
     unwrap_method: Literal["xatlas", "custom"] = "xatlas",
     raylen_method: Literal["edge", "none"] = "edge",
     num_pixels_per_side=1024,
+    texture_rows_per_chunk: int = 256,
 ):
     """Textures a mesh using the radiance field from the Pipeline.
     The mesh is written to an OBJ file in the output directory,
@@ -345,6 +346,7 @@ def export_textured_mesh(
         unwrap_method: The method to use for unwrapping the mesh.
         offset_method: The method to use for computing the ray length to render.
         num_pixels_per_side: The number of pixels per side of the texture image.
+        texture_rows_per_chunk: Number of texture rows to render per batch.
     """
 
     # pylint: disable=too-many-statements
@@ -405,11 +407,27 @@ def export_textured_mesh(
     )
 
     CONSOLE.print("Creating texture image by rendering with NeRF...")
+    image_height, image_width = origins.shape[:2]
+    rgb_chunks = []
     with torch.no_grad():
-        outputs = pipeline.model.get_outputs_for_camera_ray_bundle(camera_ray_bundle)
+        for row_start in range(0, image_height, texture_rows_per_chunk):
+            row_end = min(row_start + texture_rows_per_chunk, image_height)
+            chunk_ray_bundle = RayBundle(
+                origins=origins[row_start:row_end],
+                directions=directions[row_start:row_end],
+                pixel_area=pixel_area[row_start:row_end],
+                camera_indices=camera_indices[row_start:row_end],
+                directions_norm=directions_norm[row_start:row_end],
+                nears=nears[row_start:row_end],
+                fars=fars[row_start:row_end],
+            )
+            chunk_outputs = pipeline.model.get_outputs_for_camera_ray_bundle(chunk_ray_bundle)
+            rgb_chunks.append(chunk_outputs["rgb"].cpu())
+            del chunk_outputs
+            torch.cuda.empty_cache()
 
     # save the texture image
-    texture_image = outputs["rgb"].cpu().numpy()
+    texture_image = torch.cat(rgb_chunks, dim=0).numpy()
     media.write_image(str(output_dir / "material_0.png"), texture_image)
 
     CONSOLE.print("Writing relevant OBJ information to files...")

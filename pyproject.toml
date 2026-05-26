@@ -15,7 +15,7 @@ classifiers = [
 ]
 dependencies = [
     "appdirs>=1.4",
-    "av==9.2.0",
+    "av==12.3.0",
     "tyro>=0.3.31",
     "gdown==4.6.0",
     "ninja==1.10.2.3",
@@ -31,6 +31,7 @@ dependencies = [
     "nerfacc==0.3.5",
     "open3d>=0.16.0",
     "opencv-python==4.6.0.66",
+    "pillow<10",
     "plotly==5.7.0",
     "protobuf==3.20.0",
     "pymeshlab==2022.2.post2",
