@@ -1,4 +1,5 @@
-[build-system]
+nvidia-smi          # GPU 드라이버 확인 (CUDA 11.3 이상 지원 필요)
+nvcc --version [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 

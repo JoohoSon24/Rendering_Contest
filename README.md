@@ -27,9 +27,18 @@ SDFStudio is a unified and modular framework for neural implicit surface reconst
 
 ### Prerequisites
 
-CUDA must be installed on the system. This library has been tested with version 11.3. You can find more information about installing CUDA [here](https://docs.nvidia.com/cuda/cuda-quick-start-guide/index.html).
+**⚠️ 중요: CUDA 툴킷 버전과 PyTorch 빌드 버전이 반드시 일치해야 합니다.**
 
-### Create environment
+이 프로젝트는 **PyTorch 1.12.1 (CUDA 11.3 빌드)** 와 **CUDA 11.3 툴킷** 을 사용합니다.  
+`nvidia-smi` 가 동작하더라도 CUDA 툴킷(nvcc 포함)은 별도로 설치해야 합니다.
+
+설치 전 확인:
+```bash
+nvidia-smi          # GPU 드라이버 확인 (CUDA 11.3 이상 지원 필요)
+nvcc --version      # CUDA 툴킷 확인 (없어도 아래 단계에서 설치)
+```
+
+### Step 1: Conda 환경 생성
 
 SDFStudio requires `python >= 3.7`. We recommend using conda to manage dependencies. Make sure to install [Conda](https://docs.conda.io/en/latest/miniconda.html) before proceeding.
 
@@ -39,25 +48,86 @@ conda activate sdfstudio
 python -m pip install --upgrade pip
 ```
 
-### Dependencies
+### Step 2: CUDA 11.3 툴킷 설치 (PyTorch보다 먼저!)
 
-Install pytorch with CUDA (this repo has been tested with CUDA 11.3) and [tiny-cuda-nn](https://github.com/NVlabs/tiny-cuda-nn)
+> **⚠️ 반드시 PyTorch 설치 전에 CUDA 툴킷을 먼저 설치해야 합니다.**  
+> 버전이 다르면 `tiny-cuda-nn` 컴파일 시 `CUDA version mismatch` 에러가 발생합니다.
 
 ```bash
-pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
+conda install -c "nvidia/label/cuda-11.3.0" cuda-toolkit -y
+```
+
+설치 후 환경 변수를 설정합니다:
+
+```bash
+export CUDA_HOME=$CONDA_PREFIX
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+```
+
+**영구 적용** (새 터미널을 열어도 유지되게 하려면):
+```bash
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+cat >> $CONDA_PREFIX/etc/conda/activate.d/cuda_env.sh << 'EOF'
+export CUDA_HOME=$CONDA_PREFIX
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+EOF
+```
+
+CUDA 버전이 **11.3.x** 인지 반드시 확인합니다:
+```bash
+nvcc --version
+# 출력: Cuda compilation tools, release 11.3, ...
+```
+
+### Step 3: PyTorch 및 Dependencies 설치
+
+```bash
+# ninja 설치 (컴파일 속도 향상)
+conda install ninja -y
+
+# PyTorch + torchvision (CUDA 11.3 빌드)
+pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 \
+    -f https://download.pytorch.org/whl/torch_stable.html
+
+# tiny-cuda-nn 설치 (CUDA 컴파일 포함, 시간이 걸림)
 pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
 ```
 
-### Installing SDFStudio
+> `tiny-cuda-nn` 설치는 CUDA 코드를 직접 컴파일하므로 수 분이 소요될 수 있습니다.
+
+### Step 4: SDFStudio 설치
 
 ```bash
-git clone https://github.com/autonomousvision/sdfstudio.git
-cd sdfstudio
 pip install --upgrade pip setuptools
 pip install -e .
 # install tab completion
 ns-install-cli
 ```
+
+---
+
+### ❌ 자주 발생하는 에러 및 해결법
+
+#### `CUDA_HOME environment variable is not set`
+→ Step 2의 환경 변수 설정이 누락된 경우입니다.
+```bash
+export CUDA_HOME=$CONDA_PREFIX
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+```
+
+#### `The detected CUDA version (X.Y) mismatches the version that was used to compile PyTorch (11.3)`
+→ conda에 잘못된 버전의 CUDA 툴킷이 설치된 경우입니다. 반드시 **11.3 버전**을 설치하세요:
+```bash
+# 기존 cuda-toolkit 제거 후 재설치
+conda remove cuda-toolkit -y
+conda install -c "nvidia/label/cuda-11.3.0" cuda-toolkit -y
+```
+
+#### `nvcc: not found`
+→ CUDA 툴킷이 PATH에 없습니다. `export PATH=$CUDA_HOME/bin:$PATH` 를 실행하거나 Step 2의 영구 적용 단계를 수행하세요.
 
 ## 2. Train your first model
 
