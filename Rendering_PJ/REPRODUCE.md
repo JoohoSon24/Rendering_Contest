@@ -47,44 +47,57 @@
 - CUDA 지원 GPU (A100 또는 동급 이상 권장)
 - RAM 32 GB 이상
 
-### 시스템 패키지
-
-ffmpeg는 conda-forge로 설치합니다 (sudo 불필요).
-
-```bash
-conda activate nerfstudio
-conda install -c conda-forge ffmpeg -y
-```
-
-> `xvfb`는 GLFW 뷰어(`viewer_render.py`) 전용으로, 최종 영상 재현(경로 A)에는 불필요합니다.  
-> 필요 시 시스템 관리자에게 `sudo apt-get install -y xvfb` 요청하세요.
-
 ### Python 환경 (nerfstudio conda)
 
-> 서버에 이미 `/home/ubuntu/miniconda3/envs/nerfstudio` 환경이 구성되어 있습니다.  
-> 새 환경이 필요한 경우 아래 절차를 따르세요.
+> 필요한 환경을 갖추기 위해 아래 절차를 따릅니다.
 
 ```bash
-# 새 환경 구성 (이미 있으면 건너뜀)
+# 1. 환경 생성
 conda create -n nerfstudio python=3.10 -y
 conda activate nerfstudio
 
+# 2. PyTorch (CUDA 12.4 전용, 버전 고정 필수)
+pip install --no-cache-dir "torch==2.6.0" "torchvision==0.21.0" \
+    --index-url https://download.pytorch.org/whl/cu124
+
+# 3. nerfstudio + 렌더링 라이브러리
 pip install nerfstudio==1.1.5
 pip install pyrender==0.1.45 trimesh==4.6.0
 pip install flask opencv-python-headless pillow scipy
 
-# gsplat — CUDA 확장 빌드 포함 (최초 설치 시 10~20분 소요)
+# 4. CUDA 컴파일러 + 헤더 (gsplat JIT 빌드용)
+conda install -c nvidia cuda-nvcc=12.4 cuda-cudart-dev=12.4 -y
+
+# conda nvidia 패키지는 헤더/라이브러리를 targets/ 하위에 설치하지만
+# nvcc와 링커는 include/ lib/ 만 탐색하므로 symlink로 연결
+for d in cub cuda nv thrust; do
+    ln -sfn "$CONDA_PREFIX/targets/x86_64-linux/include/$d" "$CONDA_PREFIX/include/$d"
+done
+ln -sfn libcudart.so.12 "$CONDA_PREFIX/lib/libcudart.so"
+
+# CUDA_HOME 설정 (torch cpp_extension이 conda 환경의 헤더를 찾도록)
+export CUDA_HOME=$CONDA_PREFIX
+
+# 5. gsplat 설치
 pip install gsplat==1.4.0
 
-# CUDA arch 영구 등록 (gsplat JIT 빌드 필수)
+# 6. ffmpeg
+conda install -c conda-forge ffmpeg -y
+
+# 7. CUDA arch 등록 + gsplat JIT 사전 컴파일 (10~20분 소요)
+cd ~/cs479/Rendering_Contest/Rendering_PJ
 bash scripts/setup_nerfstudio_env.sh
+conda activate nerfstudio  # 환경 변수 적용을 위해 재활성화
 ```
 
-> **gsplat 빌드 관련**: `pip install gsplat`은 CUDA 커널을 직접 컴파일하므로  
-> 최초 설치에 **10~20분** 걸립니다. 진행 중 아래 메시지가 정상입니다:
+> **setup_nerfstudio_env.sh [2/3] 단계**에서 gsplat CUDA 커널을 컴파일합니다.  
+> 최초 실행 시 **10~20분** 소요되며, 아래 메시지가 정상입니다:
 > ```
 > gsplat: Setting up CUDA with MAX_JOBS=10 (This may take a few minutes the first time)
 > ```
+
+> **xvfb 관련**: `xvfb`는 GLFW 기반 뷰어(`viewer_render.py`) 전용이며, 최종 영상 재현(경로 A)에는 불필요합니다.  
+> 경로 B에서 뷰어를 사용하려면 시스템 관리자에게 `sudo apt-get install -y xvfb` 요청하세요.
 
 ---
 
@@ -94,7 +107,7 @@ bash scripts/setup_nerfstudio_env.sh
 아래 명령 한 줄로 `final_transition_output_ver2.mp4`를 재현합니다.
 
 ```bash
-cd Rendering_PJ
+cd ~/cs479/Rendering_Contest/Rendering_PJ
 conda activate nerfstudio
 export PYOPENGL_PLATFORM=egl
 
@@ -141,13 +154,14 @@ bash generate_final.sh --skip-deform
 [https://gltf-viewer.donmccurdy.com](https://gltf-viewer.donmccurdy.com) 접속 →  
 `meshes/deformation1.glb` 드래그앤드롭 → 우측 "Animation" 패널에서 재생
 
-### 방법 2: MeshLab
+### 방법 2: MeshLab (로컬 PC 전용)
+
+> MeshLab은 GUI 앱으로 **로컬 PC에 설치 후** 실행합니다. 헤드리스 서버에서는 사용 불가.  
+> MeshLab은 정적 프레임만 표시합니다 (애니메이션 미지원).
 
 ```bash
 MeshLab meshes/deformation1.glb
 ```
-
-> MeshLab은 정적 프레임만 표시합니다 (애니메이션 미지원).
 
 ### 방법 3: 인터랙티브 뷰어 (렌더 연동)
 

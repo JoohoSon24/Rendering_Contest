@@ -37,7 +37,7 @@ echo "========================================"
 #   8.0       → A100 (SM 8.0) 네이티브 컴파일
 #   9.0+PTX   → Hopper (SM 9.0) PTX 포함 → Blackwell(SM 10.0) 등 향후 GPU에서
 #               런타임 PTX JIT 컴파일로 동작 (Unknown CUDA arch 에러 방지)
-conda env config vars set TORCH_CUDA_ARCH_LIST="8.0;9.0+PTX" -n "${ENV_NAME}"
+conda env config vars set TORCH_CUDA_ARCH_LIST="8.0;9.0+PTX" CUDA_HOME="${CONDA_PREFIX}" -n "${ENV_NAME}"
 
 # 재활성화해서 환경 변수 적용 (set -u와 충돌하므로 일시 해제)
 set +euo pipefail

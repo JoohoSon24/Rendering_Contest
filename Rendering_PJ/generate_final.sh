@@ -27,7 +27,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON="/home/ubuntu/miniconda3/envs/nerfstudio/bin/python"
+PYTHON="$(conda run -n nerfstudio which python 2>/dev/null || true)"
+[[ -z "$PYTHON" ]] && PYTHON="$(find /home/ubuntu -path "*/envs/nerfstudio/bin/python" 2>/dev/null | head -1)"
 
 # ── 기본값 ─────────────────────────────────────────────────────────
 GLB="${ROOT}/meshes/deformation1.glb"
