@@ -24,7 +24,7 @@ set -euo pipefail
 ENV_NAME="${1:-nerfstudio}"
 
 set +u
-source ~/miniconda3/etc/profile.d/conda.sh
+eval "$(conda shell.bash hook)"
 conda activate "${ENV_NAME}"
 set -u
 

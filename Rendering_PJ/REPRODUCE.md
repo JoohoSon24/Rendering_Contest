@@ -15,8 +15,8 @@
 | `meshes/splat_wo_background_2.ply` | SuperSplat 편집 후 PLY (중간 결과) | 4.6 MB |
 | `meshes/object-resumed_gaussians/splat.ply` | GS 학습 원본 PLY (중간 결과) | 12 MB |
 | `outputs/object-resumed/` | GS 학습 체크포인트 | 53 MB |
-| `data/object.MOV` | 오브젝트 촬영 원본 영상 | — |
-| `data/background.MOV` | 배경 촬영 원본 영상 | — |
+| `data/object.MOV` | 오브젝트 촬영 원본 영상 (**git 미포함**, 별도 전달) | 219 MB |
+| `data/background.MOV` | 배경 촬영 원본 영상 (**git 미포함**, 별도 전달) | 117 MB |
 
 ---
 
@@ -48,10 +48,16 @@
 - RAM 32 GB 이상
 
 ### 시스템 패키지
+
+ffmpeg는 conda-forge로 설치합니다 (sudo 불필요).
+
 ```bash
-sudo apt-get update
-sudo apt-get install -y ffmpeg xvfb
+conda activate nerfstudio
+conda install -c conda-forge ffmpeg -y
 ```
+
+> `xvfb`는 GLFW 뷰어(`viewer_render.py`) 전용으로, 최종 영상 재현(경로 A)에는 불필요합니다.  
+> 필요 시 시스템 관리자에게 `sudo apt-get install -y xvfb` 요청하세요.
 
 ### Python 환경 (nerfstudio conda)
 
@@ -64,13 +70,21 @@ conda create -n nerfstudio python=3.10 -y
 conda activate nerfstudio
 
 pip install nerfstudio==1.1.5
-pip install gsplat==1.4.0
 pip install pyrender==0.1.45 trimesh==4.6.0
 pip install flask opencv-python-headless pillow scipy
+
+# gsplat — CUDA 확장 빌드 포함 (최초 설치 시 10~20분 소요)
+pip install gsplat==1.4.0
 
 # CUDA arch 영구 등록 (gsplat JIT 빌드 필수)
 bash scripts/setup_nerfstudio_env.sh
 ```
+
+> **gsplat 빌드 관련**: `pip install gsplat`은 CUDA 커널을 직접 컴파일하므로  
+> 최초 설치에 **10~20분** 걸립니다. 진행 중 아래 메시지가 정상입니다:
+> ```
+> gsplat: Setting up CUDA with MAX_JOBS=10 (This may take a few minutes the first time)
+> ```
 
 ---
 
